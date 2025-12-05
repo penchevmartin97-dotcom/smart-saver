@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database Service
+  postgres:
+    image: postgres:15-alpine
+    container_name: smart-saver-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-smart_saver_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-smart_saver_password}
+      POSTGRES_DB: ${DB_NAME:-smart_saver_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-smart_saver_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - smart-saver-network
+    restart: unless-stopped
+
+  # Node.js Backend Service
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smart-saver-backend
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: ${PORT:-3000}
+      DATABASE_URL: postgresql://${DB_USER:-smart_saver_user}:${DB_PASSWORD:-smart_saver_password}@postgres:5432/${DB_NAME:-smart_saver_db}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-smart_saver_user}
+      DB_PASSWORD: ${DB_PASSWORD:-smart_saver_password}
+      DB_NAME: ${DB_NAME:-smart_saver_db}
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - smart-saver-network
+    restart: unless-stopped
+    command: npm start
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  smart-saver-network:
+    driver: bridge
